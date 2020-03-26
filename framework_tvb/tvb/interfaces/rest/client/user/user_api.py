@@ -27,19 +27,21 @@
 #   Frontiers in Neuroinformatics (7:10. doi: 10.3389/fninf.2013.00010)
 #
 #
+from time import sleep
 
+import cherrypy
 from tvb.interfaces.rest.client.client_decorators import handle_response
 from tvb.interfaces.rest.client.main_api import MainApi
 from tvb.interfaces.rest.commons.dtos import ProjectDto
-from tvb.interfaces.rest.commons.strings import RestLink, FormKeyInput, RestNamespace
+from tvb.interfaces.rest.commons.strings import RestLink, FormKeyInput, RestNamespace, Strings
 
 
 class UserApi(MainApi):
     @handle_response
-    def login(self, username, password):
+    def login(self, code, redirect_uri):
         response = self.secured_request().post(self.build_request_url(RestLink.LOGIN.compute_url(True)), json={
-            FormKeyInput.USERS_USERNAME.value: username,
-            FormKeyInput.USERS_PASSWORD.value: password
+            FormKeyInput.CODE.value: code,
+            FormKeyInput.REDIRECT_URI.value: redirect_uri
         })
         return response
 
@@ -65,3 +67,40 @@ class UserApi(MainApi):
             FormKeyInput.CREATE_PROJECT_NAME.value: project_name,
             FormKeyInput.CREATE_PROJECT_DESCRIPTION.value: project_description
         })
+
+    @handle_response
+    def _get_urls(self, redirect_uri):
+        return self.secured_request().get(self.build_request_url(RestLink.USEFUL_URLS.compute_url(True)), params={
+            FormKeyInput.REDIRECT_URI.value: redirect_uri
+        })
+
+    def browser_login(self, login_callback_port, open_browser_function):
+        redirect_uri = "http://127.0.0.1:{}".format(login_callback_port)
+
+        # Fetch account and authorization urls
+        urls = self._get_urls(redirect_uri)
+        account_url = urls[Strings.ACCOUNT_URL.value]
+        auth_url = urls[Strings.AUTH_URL.value]
+
+        # CherryPy configurations
+        class LoginCallbackApp:
+            authorization_code = None
+
+            @cherrypy.expose
+            def index(self, session_state, code):
+                LoginCallbackApp.authorization_code = code
+                raise cherrypy.HTTPRedirect(account_url)
+
+        cherrypy.config.update({'server.socket_port': login_callback_port})
+        cherrypy.tree.mount(LoginCallbackApp())
+        cherrypy.engine.signals.subscribe()
+        cherrypy.engine.start()
+        open_browser_function(auth_url)
+        while LoginCallbackApp.authorization_code is None:
+            # Wait until login is performed
+            sleep(1)
+        # Stop CherryPy
+        cherrypy.engine.stop()
+
+        # Ask keycloak server for tokens using the authorization code
+        return self.login(code=LoginCallbackApp.authorization_code, redirect_uri=redirect_uri)
