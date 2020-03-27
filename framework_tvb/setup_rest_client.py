@@ -44,7 +44,7 @@ VERSION = "2.0.2a3"
 
 TVB_TEAM = "Lia Domide, Paula Popa, Bogdan Valean, Robert Vincze"
 
-TVB_INSTALL_REQUIREMENTS = ["cherrypy", "allensdk", "h5py", "networkx", "nibabel", "numpy", "Pillow", "psutil",
+TVB_INSTALL_REQUIREMENTS = ["allensdk", "cherrypy", "h5py", "networkx", "nibabel", "numpy", "Pillow", "psutil",
                             "requests", "scipy",
                             "simplejson", "sqlalchemy", "sqlalchemy-migrate", "tvb-data", "tvb-gdist", "tvb-library"]
 
